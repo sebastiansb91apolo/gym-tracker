@@ -1185,7 +1185,7 @@ let currentExerciseId = null;
 
 async function initDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open("GymTrackerDB", 4);
+    const req = indexedDB.open("GymTrackerDB", 5);
     req.onerror = () => reject(req.error);
     req.onsuccess = () => {
       db = req.result;
@@ -1232,8 +1232,104 @@ async function initDB() {
           });
         };
       }
+      if (e.oldVersion < 5) {
+        // v5: migrar rutina pre-cargada al nuevo plan Mayo 2026
+        const routinesStore = tx.objectStore("routines");
+        const routinesReq = routinesStore.getAll();
+        routinesReq.onsuccess = () => {
+          const newDays = getCurrentSeedDays();
+          let migrated = false;
+          routinesReq.result.forEach(routine => {
+            if (routine.name === "Rutina Noviembre 2025") {
+              routine.name = "Rutina Mayo 2026";
+              routine.days = newDays;
+              routinesStore.put(routine);
+              migrated = true;
+            }
+          });
+          // Si no había rutina pre-cargada (usuario nuevo), seed normal lo hará al iniciar
+        };
+      }
     };
   });
+}
+
+function getCurrentSeedDays() {
+  return [
+    {
+      dayNumber: 1,
+      exercises: [
+        { name: "Press plano barra", muscleGroup: "pecho", sets: 4, repsPattern: "10-8-8-6", defaultUnit: "kg", notes: "" },
+        { name: "Press militar mancuerna", muscleGroup: "hombro", sets: 4, repsPattern: "10-10-8-8", defaultUnit: "kg", notes: "" },
+        { name: "Press inclinado con mancuerna", muscleGroup: "pecho", sets: 3, repsPattern: "12-10-10", defaultUnit: "kg", notes: "" },
+        { name: "Fondos", muscleGroup: "triceps", sets: 3, repsPattern: "12", defaultUnit: "kg", notes: "" },
+        { name: "Elevaciones laterales mancuerna", muscleGroup: "hombro", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
+        { name: "Tríceps con barra en polea", muscleGroup: "triceps", sets: 3, repsPattern: "10-8-8", defaultUnit: "kg", notes: "" },
+        { name: "Tríceps encima de cabeza polea", muscleGroup: "triceps", sets: 3, repsPattern: "10", defaultUnit: "kg", notes: "" }
+      ]
+    },
+    {
+      dayNumber: 2,
+      exercises: [
+        { name: "Dominadas", muscleGroup: "espalda", sets: 4, repsPattern: "10", defaultUnit: "kg", notes: "" },
+        { name: "Remo en polea", muscleGroup: "espalda", sets: 4, repsPattern: "12-10-10-8", defaultUnit: "kg", notes: "" },
+        { name: "Jalón al pecho", muscleGroup: "espalda", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
+        { name: "Face Pulls", muscleGroup: "hombro", sets: 3, repsPattern: "12", defaultUnit: "kg", notes: "" },
+        { name: "Curl martillo", muscleGroup: "biceps", sets: 3, repsPattern: "10", defaultUnit: "kg", notes: "" },
+        { name: "Curl bíceps barra Z", muscleGroup: "biceps", sets: 3, repsPattern: "10-10-8", defaultUnit: "kg", notes: "" },
+        { name: "Curl inclinado con mancuernas", muscleGroup: "biceps", sets: 3, repsPattern: "10-10-8", defaultUnit: "kg", notes: "" }
+      ]
+    },
+    {
+      dayNumber: 3,
+      exercises: [
+        { name: "Sentadilla libre/Smith", muscleGroup: "cuadriceps", sets: 4, repsPattern: "12-10-8-6", defaultUnit: "kg", notes: "" },
+        { name: "Prensa", muscleGroup: "cuadriceps", sets: 4, repsPattern: "10-10-8-8", defaultUnit: "kg", notes: "" },
+        { name: "Zancada en sitio", muscleGroup: "cuadriceps", sets: 3, repsPattern: "10 por pierna", defaultUnit: "kg", notes: "" },
+        { name: "Extensión pierna", muscleGroup: "cuadriceps", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
+        { name: "Elevación talón parado", muscleGroup: "pantorrilla", sets: 4, repsPattern: "20", defaultUnit: "kg", notes: "" },
+        { name: "Cardio", muscleGroup: "cardio", sets: 1, repsPattern: "35 min", defaultUnit: "kg", notes: "" }
+      ]
+    },
+    {
+      dayNumber: 4,
+      exercises: [
+        { name: "Press inclinado con mancuerna", muscleGroup: "pecho", sets: 4, repsPattern: "12-10-8-8", defaultUnit: "kg", notes: "" },
+        { name: "Press plano barra", muscleGroup: "pecho", sets: 4, repsPattern: "10-10-8-8", defaultUnit: "kg", notes: "" },
+        { name: "Aperturas máquina", muscleGroup: "pecho", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
+        { name: "Elevaciones laterales polea", muscleGroup: "hombro", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
+        { name: "Press hombro máquina", muscleGroup: "hombro", sets: 3, repsPattern: "12", defaultUnit: "kg", notes: "" },
+        { name: "Push down con cuerda", muscleGroup: "triceps", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
+        { name: "Copa con mancuerna", muscleGroup: "triceps", sets: 3, repsPattern: "10-10-8", defaultUnit: "kg", notes: "" },
+        { name: "Cardio escaladora", muscleGroup: "cardio", sets: 1, repsPattern: "40 min", defaultUnit: "kg", notes: "" }
+      ]
+    },
+    {
+      dayNumber: 5,
+      exercises: [
+        { name: "Remo con mancuerna", muscleGroup: "espalda", sets: 4, repsPattern: "10-10-8-8", defaultUnit: "kg", notes: "" },
+        { name: "Jalón al pecho", muscleGroup: "espalda", sets: 3, repsPattern: "12-12-10", defaultUnit: "kg", notes: "" },
+        { name: "Pull over con soga", muscleGroup: "espalda", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
+        { name: "Remo polea", muscleGroup: "espalda", sets: 3, repsPattern: "12", defaultUnit: "kg", notes: "" },
+        { name: "Curl predicador", muscleGroup: "biceps", sets: 3, repsPattern: "10-10-8", defaultUnit: "kg", notes: "" },
+        { name: "Curl martillo", muscleGroup: "biceps", sets: 3, repsPattern: "10-10-10", defaultUnit: "kg", notes: "" },
+        { name: "Cardio HIIT", muscleGroup: "cardio", sets: 1, repsPattern: "20 min", defaultUnit: "kg", notes: "" }
+      ]
+    },
+    {
+      dayNumber: 6,
+      exercises: [
+        { name: "Sentadilla frontal", muscleGroup: "cuadriceps", sets: 4, repsPattern: "10-10-8-8", defaultUnit: "kg", notes: "" },
+        { name: "Hip Thrust", muscleGroup: "gluteo", sets: 4, repsPattern: "10-10-8-8", defaultUnit: "kg", notes: "" },
+        { name: "Curl femoral máquina", muscleGroup: "femoral", sets: 3, repsPattern: "10-10-8-8", defaultUnit: "kg", notes: "" },
+        { name: "Sentadilla búlgara", muscleGroup: "cuadriceps", sets: 3, repsPattern: "10 por pierna", defaultUnit: "kg", notes: "" },
+        { name: "Crunch con soga", muscleGroup: "abdomen", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
+        { name: "Elevación rodillas", muscleGroup: "abdomen", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
+        { name: "Rueda abdominal", muscleGroup: "abdomen", sets: 3, repsPattern: "12", defaultUnit: "kg", notes: "" },
+        { name: "Cardio escaladora", muscleGroup: "cardio", sets: 1, repsPattern: "35 min", defaultUnit: "kg", notes: "" }
+      ]
+    }
+  ];
 }
 
 async function seedRoutines() {
@@ -1246,82 +1342,10 @@ async function seedRoutines() {
 
   const routine = {
     id: crypto.randomUUID(),
-    name: "Rutina Noviembre 2025",
+    name: "Rutina Mayo 2026",
     createdAt: getTodayISO(),
     isActive: true,
-    days: [
-      {
-        dayNumber: 1,
-        exercises: [
-          { name: "Sentadilla profunda en máquina", muscleGroup: "cuadriceps", sets: 4, repsPattern: "12-10-8-8", defaultUnit: "kg", notes: "" },
-          { name: "Prensa inclinada", muscleGroup: "cuadriceps", sets: 4, repsPattern: "15-12-10-8", defaultUnit: "kg", notes: "" },
-          { name: "Extensión de cuádriceps", muscleGroup: "cuadriceps", sets: 3, repsPattern: "15-15-12", defaultUnit: "kg", notes: "" },
-          { name: "Curl femoral máquina", muscleGroup: "femoral", sets: 3, repsPattern: "12", defaultUnit: "kg", notes: "" },
-          { name: "Elevaciones de talones (pantorrilla)", muscleGroup: "pantorrilla", sets: 3, repsPattern: "20", defaultUnit: "kg", notes: "" },
-          { name: "Bicicleta", muscleGroup: "cardio", sets: 1, repsPattern: "30 min", defaultUnit: "kg", notes: "" }
-        ]
-      },
-      {
-        dayNumber: 2,
-        exercises: [
-          { name: "Press barra plano", muscleGroup: "pecho", sets: 3, repsPattern: "12-12-10", defaultUnit: "kg", notes: "" },
-          { name: "Press en máquina", muscleGroup: "pecho", sets: 4, repsPattern: "12-10-8-8", defaultUnit: "kg", notes: "" },
-          { name: "Press inclinado mancuerna", muscleGroup: "pecho", sets: 3, repsPattern: "15-12-12", defaultUnit: "kg", notes: "" },
-          { name: "Remo en polea baja", muscleGroup: "espalda", sets: 4, repsPattern: "12-10-10-8", defaultUnit: "kg", notes: "" },
-          { name: "Jalón al pecho abierto", muscleGroup: "espalda", sets: 3, repsPattern: "12-12-10", defaultUnit: "kg", notes: "" },
-          { name: "Pullover soga", muscleGroup: "espalda", sets: 3, repsPattern: "12-12-10", defaultUnit: "kg", notes: "" },
-          { name: "Fondos asistidos", muscleGroup: "triceps", sets: 3, repsPattern: "12", defaultUnit: "kg", notes: "" },
-          { name: "Extensión tríceps soga", muscleGroup: "triceps", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
-          { name: "Cardio caminadora", muscleGroup: "cardio", sets: 1, repsPattern: "25 min", defaultUnit: "kg", notes: "" }
-        ]
-      },
-      {
-        dayNumber: 3,
-        exercises: [
-          { name: "Press sentado mancuerna", muscleGroup: "hombro", sets: 4, repsPattern: "12-10-8-8", defaultUnit: "kg", notes: "" },
-          { name: "Elevaciones laterales con mancuerna", muscleGroup: "hombro", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
-          { name: "Pájaros en banco inclinado", muscleGroup: "hombro", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
-          { name: "Curl bíceps barra Z", muscleGroup: "biceps", sets: 3, repsPattern: "10", defaultUnit: "kg", notes: "" },
-          { name: "Curl alterno con supinación", muscleGroup: "biceps", sets: 3, repsPattern: "10-8-8", defaultUnit: "kg", notes: "" },
-          { name: "Elíptica", muscleGroup: "cardio", sets: 1, repsPattern: "20 min", defaultUnit: "kg", notes: "" }
-        ]
-      },
-      {
-        dayNumber: 4,
-        exercises: [
-          { name: "Peso muerto rumano con mancuernas", muscleGroup: "femoral", sets: 3, repsPattern: "10-10-8", defaultUnit: "kg", notes: "" },
-          { name: "Hip thrust (puente de glúteo)", muscleGroup: "gluteo", sets: 4, repsPattern: "12-10-10-8", defaultUnit: "kg", notes: "" },
-          { name: "Curl femoral tumbado o fitball", muscleGroup: "femoral", sets: 3, repsPattern: "15-12-12", defaultUnit: "kg", notes: "" },
-          { name: "Elevación talones sentado (pantorrilla)", muscleGroup: "pantorrilla", sets: 3, repsPattern: "15-12-12", defaultUnit: "kg", notes: "" },
-          { name: "Zancadas asistidas", muscleGroup: "gluteo", sets: 3, repsPattern: "12", defaultUnit: "kg", notes: "" },
-          { name: "Bicicleta estática", muscleGroup: "cardio", sets: 1, repsPattern: "30 min", defaultUnit: "kg", notes: "" }
-        ]
-      },
-      {
-        dayNumber: 5,
-        exercises: [
-          { name: "Press plano con mancuerna", muscleGroup: "pecho", sets: 4, repsPattern: "12", defaultUnit: "kg", notes: "" },
-          { name: "Aperturas en máquina", muscleGroup: "pecho", sets: 3, repsPattern: "15-12-12", defaultUnit: "kg", notes: "" },
-          { name: "Fondos", muscleGroup: "triceps", sets: 4, repsPattern: "12", defaultUnit: "kg", notes: "" },
-          { name: "Dominadas", muscleGroup: "espalda", sets: 3, repsPattern: "10", defaultUnit: "kg", notes: "" },
-          { name: "Jalón con agarre cerrado", muscleGroup: "espalda", sets: 3, repsPattern: "12", defaultUnit: "kg", notes: "" },
-          { name: "Remo máquina", muscleGroup: "espalda", sets: 3, repsPattern: "12", defaultUnit: "kg", notes: "" },
-          { name: "Caminata ligera", muscleGroup: "cardio", sets: 1, repsPattern: "30 min", defaultUnit: "kg", notes: "" }
-        ]
-      },
-      {
-        dayNumber: 6,
-        exercises: [
-          { name: "Sentadilla asistida", muscleGroup: "cuadriceps", sets: 4, repsPattern: "12-10-8-8", defaultUnit: "kg", notes: "" },
-          { name: "Prensa pesada", muscleGroup: "cuadriceps", sets: 4, repsPattern: "15-12-10-8", defaultUnit: "kg", notes: "" },
-          { name: "Zancadas estáticas", muscleGroup: "cuadriceps", sets: 3, repsPattern: "12-12", defaultUnit: "kg", notes: "" },
-          { name: "Extensión de pierna", muscleGroup: "cuadriceps", sets: 3, repsPattern: "15-15-12", defaultUnit: "kg", notes: "" },
-          { name: "Crunch en polea", muscleGroup: "abdomen", sets: 3, repsPattern: "20", defaultUnit: "kg", notes: "" },
-          { name: "Rueda abdominal", muscleGroup: "abdomen", sets: 3, repsPattern: "12", defaultUnit: "kg", notes: "" },
-          { name: "Cardio bici estática", muscleGroup: "cardio", sets: 1, repsPattern: "30 min", defaultUnit: "kg", notes: "" }
-        ]
-      }
-    ]
+    days: getCurrentSeedDays()
   };
 
   const tx = db.transaction("routines", "readwrite");
@@ -1994,3 +2018,4 @@ if (document.readyState === "loading") {
   </script>
 </body>
 </html>
+      const action = prompt("Acción:\n\nEdit = Renombrar\nDuplicate = Duplicar\nDelete = Eliminar");
