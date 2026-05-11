@@ -1148,17 +1148,31 @@ function inferMuscleGroup(name) {
   return "pecho";
 }
 
+function parseDateSafe(iso) {
+  if (!iso) return null;
+  const dateOnly = String(iso).split("T")[0];
+  const d = new Date(dateOnly + "T00:00:00");
+  if (isNaN(d.getTime())) return null;
+  return d;
+}
+
 function formatDate(iso) {
-  const date = new Date(iso + "T00:00:00");
-  return new Intl.DateTimeFormat("es-MX", {
-    weekday: "long",
-    day: "numeric",
-    month: "long"
-  }).format(date).replace(/^\w/, c => c.toUpperCase());
+  const date = parseDateSafe(iso);
+  if (!date) return String(iso || "");
+  try {
+    return new Intl.DateTimeFormat("es-MX", {
+      weekday: "long",
+      day: "numeric",
+      month: "long"
+    }).format(date).replace(/^\w/, c => c.toUpperCase());
+  } catch (e) {
+    return String(iso || "");
+  }
 }
 
 function formatRelativeTime(iso) {
-  const date = new Date(iso + "T00:00:00");
+  const date = parseDateSafe(iso);
+  if (!date) return "";
   const today = new Date();
   const diff = Math.floor((today - date) / (1000 * 60 * 60 * 24));
   if (diff === 0) return "hoy";
@@ -1186,7 +1200,7 @@ let editingSetId = null;
 
 async function initDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open("GymTrackerDB", 6);
+    const req = indexedDB.open("GymTrackerDB", 7);
     req.onerror = () => reject(req.error);
     req.onsuccess = () => {
       db = req.result;
@@ -1208,6 +1222,7 @@ async function initDB() {
 
       const tx = e.target.transaction;
       if (e.oldVersion < 4) {
+        // v4: agregar muscleGroup a ejercicios, unit y notes a sets
         const routinesStore = tx.objectStore("routines");
         const routinesReq = routinesStore.getAll();
         routinesReq.onsuccess = () => {
@@ -1222,7 +1237,6 @@ async function initDB() {
             routinesStore.put(routine);
           });
         };
-
         const setsStore = tx.objectStore("sets");
         const setsReq = setsStore.getAll();
         setsReq.onsuccess = () => {
@@ -1233,37 +1247,23 @@ async function initDB() {
           });
         };
       }
-      if (e.oldVersion < 5) {
-        // v5: migrar rutina pre-cargada al nuevo plan Mayo 2026
+      if (e.oldVersion < 7) {
+        // v5-v7: reemplazar rutina antigua o sin tips/RM con Plan Javier Monroy
         const routinesStore = tx.objectStore("routines");
         const routinesReq = routinesStore.getAll();
         routinesReq.onsuccess = () => {
           const newDays = getCurrentSeedDays();
-          let migrated = false;
+          const oldNames = ["Rutina Noviembre 2025", "Rutina Mayo 2026"];
           routinesReq.result.forEach(routine => {
-            if (routine.name === "Rutina Noviembre 2025") {
-              routine.name = "Rutina Mayo 2026";
-              routine.days = newDays;
-              routinesStore.put(routine);
-              migrated = true;
-            }
-      if (e.oldVersion < 6) {
-        // v6: actualizar a la rutina Plan Javier Monroy (con cardio pre/post, tips, %RM)
-        const routinesStore = tx.objectStore("routines");
-        const routinesReq = routinesStore.getAll();
-        routinesReq.onsuccess = () => {
-          const newDays = getCurrentSeedDays();
-          routinesReq.result.forEach(routine => {
-            if (routine.name === "Rutina Mayo 2026" || routine.name === "Rutina Noviembre 2025") {
+            const hasNewFields = routine.days && routine.days.some(d =>
+              d.exercises && d.exercises.some(ex => ex.tip || ex.rm || ex.cardioTiming)
+            );
+            if (oldNames.includes(routine.name) || (routine.isActive && !hasNewFields)) {
               routine.name = "Rutina Plan Javier Monroy";
               routine.days = newDays;
               routinesStore.put(routine);
             }
           });
-        };
-      }
-          });
-          // Si no había rutina pre-cargada (usuario nuevo), seed normal lo hará al iniciar
         };
       }
     };
@@ -1634,18 +1634,29 @@ async function renderHoy() {
     });
     const gridHTML = sortedExercises.map(ex => {
       const setsSinceToday = todaySets.filter(s => s.exerciseName === ex.name).length;
-      const repsStr = setsSinceToday > 0 ? `✓ ${setsSinceToday} ${setsSinceToday === 1 ? "serie" : "series"}` : "";
+      const repsStr = setsSinceToday > 0 ? `<span style="color:#4ED865;font-weight:700;">✓ ${setsSinceToday} ${setsSinceToday === 1 ? "serie" : "series"}</span>` : "";
       const mg = MUSCLE_GROUPS[ex.muscleGroup] || MUSCLE_GROUPS.pecho;
       const isCardio = ex.muscleGroup === "cardio";
       const badge = isCardio && ex.cardioTiming
-        ? `<div style="position:absolute;top:6px;right:6px;background:${mg.color};color:white;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;">${ex.cardioTiming.toUpperCase()}</div>`
+        ? `<div style="position:absolute;top:6px;right:6px;background:${mg.color};color:white;font-size:9px;font-weight:700;padding:3px 7px;border-radius:4px;letter-spacing:0.5px;">${ex.cardioTiming.toUpperCase()}</div>`
+        : "";
+      const planLine = isCardio
+        ? `<div class="exercise-card-plan">${ex.repsPattern}${ex.cardioMethod ? ` · ${ex.cardioMethod}` : ""}</div>`
+        : `<div class="exercise-card-plan">${ex.sets} × ${ex.repsPattern}</div>`;
+      const rmLine = (!isCardio && ex.rm)
+        ? `<div style="font-size:11px;color:var(--text-secondary);font-weight:600;margin-top:2px;">%RM: ${ex.rm}</div>`
+        : "";
+      const tipLine = (!isCardio && ex.tip)
+        ? `<div style="font-size:11px;color:var(--accent);font-style:italic;margin-top:4px;line-height:1.3;">💡 ${ex.tip}</div>`
         : "";
       return `
         <div class="exercise-card" data-exercise="${ex.name.replace(/"/g, "&quot;")}" style="border-left-color: ${mg.color}; position: relative;">
           ${badge}
           ${muscleIcon(ex.muscleGroup, 28)}
           <div class="exercise-card-name">${ex.name}</div>
-          <div class="exercise-card-plan">${ex.sets} × ${ex.repsPattern}</div>
+          ${planLine}
+          ${rmLine}
+          ${tipLine}
           <div class="exercise-card-status">${repsStr}</div>
         </div>
       `;
