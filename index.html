@@ -1182,10 +1182,11 @@ function getTodayISO() {
 let db = null;
 let lastUnitUsed = {};
 let currentExerciseId = null;
+let editingSetId = null;
 
 async function initDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open("GymTrackerDB", 5);
+    const req = indexedDB.open("GymTrackerDB", 6);
     req.onerror = () => reject(req.error);
     req.onsuccess = () => {
       db = req.result;
@@ -1246,6 +1247,21 @@ async function initDB() {
               routinesStore.put(routine);
               migrated = true;
             }
+      if (e.oldVersion < 6) {
+        // v6: actualizar a la rutina Plan Javier Monroy (con cardio pre/post, tips, %RM)
+        const routinesStore = tx.objectStore("routines");
+        const routinesReq = routinesStore.getAll();
+        routinesReq.onsuccess = () => {
+          const newDays = getCurrentSeedDays();
+          routinesReq.result.forEach(routine => {
+            if (routine.name === "Rutina Mayo 2026" || routine.name === "Rutina Noviembre 2025") {
+              routine.name = "Rutina Plan Javier Monroy";
+              routine.days = newDays;
+              routinesStore.put(routine);
+            }
+          });
+        };
+      }
           });
           // Si no había rutina pre-cargada (usuario nuevo), seed normal lo hará al iniciar
         };
@@ -1258,75 +1274,79 @@ function getCurrentSeedDays() {
   return [
     {
       dayNumber: 1,
+      method: "QUEMADOR",
       exercises: [
-        { name: "Press plano barra", muscleGroup: "pecho", sets: 4, repsPattern: "10-8-8-6", defaultUnit: "kg", notes: "" },
-        { name: "Press militar mancuerna", muscleGroup: "hombro", sets: 4, repsPattern: "10-10-8-8", defaultUnit: "kg", notes: "" },
-        { name: "Press inclinado con mancuerna", muscleGroup: "pecho", sets: 3, repsPattern: "12-10-10", defaultUnit: "kg", notes: "" },
-        { name: "Fondos", muscleGroup: "triceps", sets: 3, repsPattern: "12", defaultUnit: "kg", notes: "" },
-        { name: "Elevaciones laterales mancuerna", muscleGroup: "hombro", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
-        { name: "Tríceps con barra en polea", muscleGroup: "triceps", sets: 3, repsPattern: "10-8-8", defaultUnit: "kg", notes: "" },
-        { name: "Tríceps encima de cabeza polea", muscleGroup: "triceps", sets: 3, repsPattern: "10", defaultUnit: "kg", notes: "" }
+        { name: "Arc Trainer", muscleGroup: "cardio", sets: 1, repsPattern: "12 min", cardioTiming: "pre", cardioMethod: "Continuo extensivo", defaultUnit: "kg", notes: "", tip: "", rm: "" },
+        { name: "Sentadilla con barra (Back Squat)", muscleGroup: "cuadriceps", sets: 4, repsPattern: "10-9-8-8 (+4-6 parciales última)", tip: "Reps parciales en la parte alta del movimiento", rm: "65-75%", defaultUnit: "kg", notes: "" },
+        { name: "Peso muerto rumano con barra", muscleGroup: "femoral", sets: 3, repsPattern: "12-11-10 (+4-6 parciales última)", tip: "Parciales en la zona media", rm: "60-70%", defaultUnit: "kg", notes: "" },
+        { name: "Zancadas caminando con mancuernas", muscleGroup: "gluteo", sets: 3, repsPattern: "12 pasos por pierna (+4-6 por pierna última)", tip: "", rm: "55-65%", defaultUnit: "kg", notes: "" },
+        { name: "Prensa inclinada (Leg Press)", muscleGroup: "cuadriceps", sets: 4, repsPattern: "15-14-12-12 (+6-8 parciales última)", tip: "Parciales en la parte baja del ejercicio", rm: "65-75%", defaultUnit: "kg", notes: "" },
+        { name: "Extensión de cuádriceps en máquina", muscleGroup: "cuadriceps", sets: 3, repsPattern: "15-14-12 (+6-8 parciales última)", tip: "Parciales en parte inicial de la extensión", rm: "55-65%", defaultUnit: "kg", notes: "" },
+        { name: "Banca con inclinación (cardio)", muscleGroup: "cardio", sets: 1, repsPattern: "15 min", cardioTiming: "post", cardioMethod: "Continuo extensivo", defaultUnit: "kg", notes: "", tip: "", rm: "" }
       ]
     },
     {
       dayNumber: 2,
+      method: "PIRAMIDAL",
       exercises: [
-        { name: "Dominadas", muscleGroup: "espalda", sets: 4, repsPattern: "10", defaultUnit: "kg", notes: "" },
-        { name: "Remo en polea", muscleGroup: "espalda", sets: 4, repsPattern: "12-10-10-8", defaultUnit: "kg", notes: "" },
-        { name: "Jalón al pecho", muscleGroup: "espalda", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
-        { name: "Face Pulls", muscleGroup: "hombro", sets: 3, repsPattern: "12", defaultUnit: "kg", notes: "" },
-        { name: "Curl martillo", muscleGroup: "biceps", sets: 3, repsPattern: "10", defaultUnit: "kg", notes: "" },
-        { name: "Curl bíceps barra Z", muscleGroup: "biceps", sets: 3, repsPattern: "10-10-8", defaultUnit: "kg", notes: "" },
-        { name: "Curl inclinado con mancuernas", muscleGroup: "biceps", sets: 3, repsPattern: "10-10-8", defaultUnit: "kg", notes: "" }
+        { name: "Press banca barra", muscleGroup: "pecho", sets: 4, repsPattern: "12-10-8-6 (subiendo peso)", tip: "", rm: "65-80%", defaultUnit: "kg", notes: "" },
+        { name: "Dominadas lastradas o Jalón pecho", muscleGroup: "espalda", sets: 4, repsPattern: "10-8-6-6", tip: "", rm: "65-80%", defaultUnit: "kg", notes: "" },
+        { name: "Press militar barra", muscleGroup: "hombro", sets: 3, repsPattern: "12-10-8", tip: "", rm: "65-75%", defaultUnit: "kg", notes: "" },
+        { name: "Remo barra", muscleGroup: "espalda", sets: 3, repsPattern: "10-8-8", tip: "", rm: "70-75%", defaultUnit: "kg", notes: "" },
+        { name: "Fondos paralelas", muscleGroup: "triceps", sets: 3, repsPattern: "12-10-8", tip: "", rm: "60-70%", defaultUnit: "kg", notes: "" },
+        { name: "Curl bíceps barra Z", muscleGroup: "biceps", sets: 3, repsPattern: "12-10-8", tip: "", rm: "60-70%", defaultUnit: "kg", notes: "" }
       ]
     },
     {
       dayNumber: 3,
+      method: "PIRAMIDAL",
       exercises: [
-        { name: "Sentadilla libre/Smith", muscleGroup: "cuadriceps", sets: 4, repsPattern: "12-10-8-6", defaultUnit: "kg", notes: "" },
-        { name: "Prensa", muscleGroup: "cuadriceps", sets: 4, repsPattern: "10-10-8-8", defaultUnit: "kg", notes: "" },
-        { name: "Zancada en sitio", muscleGroup: "cuadriceps", sets: 3, repsPattern: "10 por pierna", defaultUnit: "kg", notes: "" },
-        { name: "Extensión pierna", muscleGroup: "cuadriceps", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
-        { name: "Elevación talón parado", muscleGroup: "pantorrilla", sets: 4, repsPattern: "20", defaultUnit: "kg", notes: "" },
-        { name: "Cardio", muscleGroup: "cardio", sets: 1, repsPattern: "35 min", defaultUnit: "kg", notes: "" }
+        { name: "Elíptica", muscleGroup: "cardio", sets: 1, repsPattern: "15 min", cardioTiming: "pre", cardioMethod: "Continuo extensivo", defaultUnit: "kg", notes: "", tip: "", rm: "" },
+        { name: "Peso muerto convencional", muscleGroup: "femoral", sets: 4, repsPattern: "8-6-5-4", tip: "", rm: "70-85%", defaultUnit: "kg", notes: "" },
+        { name: "Buenos días barra", muscleGroup: "femoral", sets: 3, repsPattern: "12-10-8", tip: "", rm: "65-75%", defaultUnit: "kg", notes: "" },
+        { name: "Hip thrust con barra", muscleGroup: "gluteo", sets: 4, repsPattern: "12-10-8-6", tip: "", rm: "65-80%", defaultUnit: "kg", notes: "" },
+        { name: "Curl femoral tumbado máquina", muscleGroup: "femoral", sets: 3, repsPattern: "15-12-10", tip: "", rm: "60-70%", defaultUnit: "kg", notes: "" },
+        { name: "Peso muerto a una pierna mancuerna", muscleGroup: "femoral", sets: 3, repsPattern: "12 c/pierna", tip: "", rm: "55-65%", defaultUnit: "kg", notes: "" },
+        { name: "Elevaciones talones en prensa", muscleGroup: "pantorrilla", sets: 5, repsPattern: "20", tip: "", rm: "55-65%", defaultUnit: "kg", notes: "" },
+        { name: "Stepper", muscleGroup: "cardio", sets: 1, repsPattern: "10 min", cardioTiming: "post", cardioMethod: "Continuo extensivo", defaultUnit: "kg", notes: "", tip: "", rm: "" }
       ]
     },
     {
       dayNumber: 4,
+      method: "QUEMADOR",
       exercises: [
-        { name: "Press inclinado con mancuerna", muscleGroup: "pecho", sets: 4, repsPattern: "12-10-8-8", defaultUnit: "kg", notes: "" },
-        { name: "Press plano barra", muscleGroup: "pecho", sets: 4, repsPattern: "10-10-8-8", defaultUnit: "kg", notes: "" },
-        { name: "Aperturas máquina", muscleGroup: "pecho", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
-        { name: "Elevaciones laterales polea", muscleGroup: "hombro", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
-        { name: "Press hombro máquina", muscleGroup: "hombro", sets: 3, repsPattern: "12", defaultUnit: "kg", notes: "" },
-        { name: "Push down con cuerda", muscleGroup: "triceps", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
-        { name: "Copa con mancuerna", muscleGroup: "triceps", sets: 3, repsPattern: "10-10-8", defaultUnit: "kg", notes: "" },
-        { name: "Cardio escaladora", muscleGroup: "cardio", sets: 1, repsPattern: "40 min", defaultUnit: "kg", notes: "" }
+        { name: "Press banca barra", muscleGroup: "pecho", sets: 4, repsPattern: "10-9-8-8 (+4-6 parciales última)", tip: "Reps parciales en la parte alta del movimiento", rm: "65-75%", defaultUnit: "kg", notes: "" },
+        { name: "Remo barra", muscleGroup: "espalda", sets: 3, repsPattern: "12-11-10 (+4-6 parciales última)", tip: "Parciales en la zona media", rm: "65-70%", defaultUnit: "kg", notes: "" },
+        { name: "Press militar mancuernas", muscleGroup: "hombro", sets: 3, repsPattern: "12-11-10 (+4-6 parciales última)", tip: "Parciales al final", rm: "60-70%", defaultUnit: "kg", notes: "" },
+        { name: "Curl bíceps mancuernas", muscleGroup: "biceps", sets: 3, repsPattern: "15-14-12 (+4-6 parciales última)", tip: "Parciales mitad recorrido", rm: "55-65%", defaultUnit: "kg", notes: "" },
+        { name: "Fondos paralelas", muscleGroup: "triceps", sets: 3, repsPattern: "12-11-10 (+4-6 parciales última)", tip: "Parciales al final", rm: "60-70%", defaultUnit: "kg", notes: "" },
+        { name: "Bicicleta estática", muscleGroup: "cardio", sets: 1, repsPattern: "15 min", cardioTiming: "post", cardioMethod: "Intervalos 30s fuerte / 60s medio", defaultUnit: "kg", notes: "", tip: "", rm: "" }
       ]
     },
     {
       dayNumber: 5,
+      method: "ESCALERA EN BLOQUES",
       exercises: [
-        { name: "Remo con mancuerna", muscleGroup: "espalda", sets: 4, repsPattern: "10-10-8-8", defaultUnit: "kg", notes: "" },
-        { name: "Jalón al pecho", muscleGroup: "espalda", sets: 3, repsPattern: "12-12-10", defaultUnit: "kg", notes: "" },
-        { name: "Pull over con soga", muscleGroup: "espalda", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
-        { name: "Remo polea", muscleGroup: "espalda", sets: 3, repsPattern: "12", defaultUnit: "kg", notes: "" },
-        { name: "Curl predicador", muscleGroup: "biceps", sets: 3, repsPattern: "10-10-8", defaultUnit: "kg", notes: "" },
-        { name: "Curl martillo", muscleGroup: "biceps", sets: 3, repsPattern: "10-10-10", defaultUnit: "kg", notes: "" },
-        { name: "Cardio HIIT", muscleGroup: "cardio", sets: 1, repsPattern: "20 min", defaultUnit: "kg", notes: "" }
+        { name: "Sentadilla frontal con barra", muscleGroup: "cuadriceps", sets: 5, repsPattern: "6-8-10-6-8", tip: "", rm: "70-75%", defaultUnit: "kg", notes: "" },
+        { name: "Prensa inclinada", muscleGroup: "cuadriceps", sets: 4, repsPattern: "6-8-10-12", tip: "", rm: "65-70%", defaultUnit: "kg", notes: "" },
+        { name: "Estocadas caminando con mancuernas", muscleGroup: "gluteo", sets: 3, repsPattern: "12-12-12 con cada pierna", tip: "", rm: "60-65%", defaultUnit: "kg", notes: "" },
+        { name: "Extensión de cuádriceps en máquina", muscleGroup: "cuadriceps", sets: 3, repsPattern: "12-10-8", tip: "", rm: "60-70%", defaultUnit: "kg", notes: "" },
+        { name: "Peso muerto sumo con mancuerna/kettlebell", muscleGroup: "gluteo", sets: 3, repsPattern: "12-10-8", tip: "", rm: "60-70%", defaultUnit: "kg", notes: "" },
+        { name: "Elevaciones de talones en prensa", muscleGroup: "pantorrilla", sets: 4, repsPattern: "20-20-20-20", tip: "", rm: "55-65%", defaultUnit: "kg", notes: "" },
+        { name: "Caminadora con inclinación 10%-12%", muscleGroup: "cardio", sets: 1, repsPattern: "20 min", cardioTiming: "post", cardioMethod: "Continuo extensivo", defaultUnit: "kg", notes: "", tip: "", rm: "" }
       ]
     },
     {
       dayNumber: 6,
+      method: "PIRAMIDAL",
       exercises: [
-        { name: "Sentadilla frontal", muscleGroup: "cuadriceps", sets: 4, repsPattern: "10-10-8-8", defaultUnit: "kg", notes: "" },
-        { name: "Hip Thrust", muscleGroup: "gluteo", sets: 4, repsPattern: "10-10-8-8", defaultUnit: "kg", notes: "" },
-        { name: "Curl femoral máquina", muscleGroup: "femoral", sets: 3, repsPattern: "10-10-8-8", defaultUnit: "kg", notes: "" },
-        { name: "Sentadilla búlgara", muscleGroup: "cuadriceps", sets: 3, repsPattern: "10 por pierna", defaultUnit: "kg", notes: "" },
-        { name: "Crunch con soga", muscleGroup: "abdomen", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
-        { name: "Elevación rodillas", muscleGroup: "abdomen", sets: 3, repsPattern: "15", defaultUnit: "kg", notes: "" },
-        { name: "Rueda abdominal", muscleGroup: "abdomen", sets: 3, repsPattern: "12", defaultUnit: "kg", notes: "" },
-        { name: "Cardio escaladora", muscleGroup: "cardio", sets: 1, repsPattern: "35 min", defaultUnit: "kg", notes: "" }
+        { name: "Press inclinado mancuernas", muscleGroup: "pecho", sets: 4, repsPattern: "12-10-8-8", tip: "", rm: "65-75%", defaultUnit: "kg", notes: "" },
+        { name: "Press banca con agarre cerrado", muscleGroup: "triceps", sets: 3, repsPattern: "12-10-8", tip: "", rm: "60-70%", defaultUnit: "kg", notes: "" },
+        { name: "Remo mancuerna", muscleGroup: "espalda", sets: 4, repsPattern: "12-10-8-8", tip: "", rm: "65-70%", defaultUnit: "kg", notes: "" },
+        { name: "Jalón al pecho estrecho", muscleGroup: "espalda", sets: 3, repsPattern: "12-10-8", tip: "", rm: "60-70%", defaultUnit: "kg", notes: "" },
+        { name: "Curl bíceps barra Z", muscleGroup: "biceps", sets: 3, repsPattern: "12-10-8", tip: "", rm: "60-70%", defaultUnit: "kg", notes: "" },
+        { name: "Face Pull (polea alta)", muscleGroup: "hombro", sets: 3, repsPattern: "15-15-15", tip: "", rm: "55-65%", defaultUnit: "kg", notes: "" },
+        { name: "Remo (cardio)", muscleGroup: "cardio", sets: 1, repsPattern: "15 min", cardioTiming: "post", cardioMethod: "Intervalos 20s fuerte / 40s suave", defaultUnit: "kg", notes: "", tip: "", rm: "" }
       ]
     }
   ];
@@ -1342,7 +1362,7 @@ async function seedRoutines() {
 
   const routine = {
     id: crypto.randomUUID(),
-    name: "Rutina Mayo 2026",
+    name: "Rutina Plan Javier Monroy",
     createdAt: getTodayISO(),
     isActive: true,
     days: getCurrentSeedDays()
@@ -1410,6 +1430,28 @@ async function saveSet(exerciseName, reps, weightDisplay, unit, notes = "") {
   await new Promise(resolve => {
     const req = store.add(set);
     req.onsuccess = () => resolve();
+  });
+}
+
+async function updateSet(id, exerciseName, reps, weightDisplay, unit, notes) {
+  const weightKg = unit === "lb" ? weightDisplay * 0.453592 : weightDisplay;
+  const tx = db.transaction("sets", "readwrite");
+  const store = tx.objectStore("sets");
+  return new Promise((resolve, reject) => {
+    const getReq = store.get(id);
+    getReq.onsuccess = () => {
+      const set = getReq.result;
+      if (!set) { resolve(); return; }
+      set.reps = reps;
+      set.weightDisplay = weightDisplay;
+      set.weightKg = weightKg;
+      set.unit = unit;
+      set.notes = notes;
+      const putReq = store.put(set);
+      putReq.onsuccess = () => resolve();
+      putReq.onerror = () => reject(putReq.error);
+    };
+    getReq.onerror = () => reject(getReq.error);
   });
 }
 
@@ -1563,42 +1605,72 @@ async function renderHoy() {
   }
 
   const todaySets = await getTodaysSets();
-  const lastSelectedDay = parseInt(localStorage.getItem("gymtracker.selectedDay")) || 1;
-  const selectedDay = routine.days.find(d => d.dayNumber === lastSelectedDay) || routine.days[0];
+  const stored = localStorage.getItem("gymtracker.selectedDay");
+  const lastSelectedDay = stored === "libre" ? "libre" : (parseInt(stored) || 1);
+  let selectedDay = null;
+  if (lastSelectedDay !== "libre") {
+    selectedDay = routine.days.find(d => d.dayNumber === lastSelectedDay) || routine.days[0];
+  }
 
   const chipsHTML = routine.days.map(d => {
     const colors = d.exercises.map(ex => MUSCLE_GROUPS[ex.muscleGroup]?.color || "#666");
     const gradient = colors.length > 1 ? `linear-gradient(90deg, ${colors[0]}, ${colors[1]})` : colors[0];
-    return `<button class="day-chip ${d.dayNumber === selectedDay.dayNumber ? "active" : ""}" data-day="${d.dayNumber}" style="${d.dayNumber === selectedDay.dayNumber ? "" : `border-color: ${gradient}; background: transparent;`}">Día ${d.dayNumber}</button>`;
+    const isActive = selectedDay && d.dayNumber === selectedDay.dayNumber;
+    return `<button class="day-chip ${isActive ? "active" : ""}" data-day="${d.dayNumber}" style="${isActive ? "" : `border-color: ${gradient}; background: transparent;`}">Día ${d.dayNumber}</button>`;
   }).join("");
-  const freeBtn = `<button class="day-chip free-day">Día libre</button>`;
+  const isLibre = lastSelectedDay === "libre";
+  const freeBtn = `<button class="day-chip free-day ${isLibre ? 'active' : ''}" data-day="libre">Día libre</button>`;
   document.getElementById("day-chips-container").innerHTML = chipsHTML + freeBtn;
 
-  document.getElementById("hoy-day-label").textContent = `Día ${selectedDay.dayNumber} · ${dayMuscleLabel(selectedDay)}`;
-
-  const gridHTML = selectedDay.exercises.map(ex => {
-    const setsSinceToday = todaySets.filter(s => s.exerciseName === ex.name).length;
-    const repsStr = setsSinceToday > 0 ? `✓ ${setsSinceToday} ${setsSinceToday === 1 ? "serie" : "series"}` : "";
-    const mg = MUSCLE_GROUPS[ex.muscleGroup] || MUSCLE_GROUPS.pecho;
-    return `
-      <div class="exercise-card" data-exercise="${ex.name}" style="border-left-color: ${mg.color}">
-        ${muscleIcon(ex.muscleGroup, 28)}
-        <div class="exercise-card-name">${ex.name}</div>
-        <div class="exercise-card-plan">${ex.sets} × ${ex.repsPattern}</div>
-        <div class="exercise-card-status">${repsStr}</div>
+  if (selectedDay) {
+    document.getElementById("hoy-day-label").textContent = `Día ${selectedDay.dayNumber} · ${dayMuscleLabel(selectedDay)}`;
+    const sortedExercises = [...selectedDay.exercises].sort((a, b) => {
+      const order = (ex) => {
+        if (ex.cardioTiming === "pre") return 0;
+        if (ex.cardioTiming === "post") return 2;
+        return 1;
+      };
+      return order(a) - order(b);
+    });
+    const gridHTML = sortedExercises.map(ex => {
+      const setsSinceToday = todaySets.filter(s => s.exerciseName === ex.name).length;
+      const repsStr = setsSinceToday > 0 ? `✓ ${setsSinceToday} ${setsSinceToday === 1 ? "serie" : "series"}` : "";
+      const mg = MUSCLE_GROUPS[ex.muscleGroup] || MUSCLE_GROUPS.pecho;
+      const isCardio = ex.muscleGroup === "cardio";
+      const badge = isCardio && ex.cardioTiming
+        ? `<div style="position:absolute;top:6px;right:6px;background:${mg.color};color:white;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;">${ex.cardioTiming.toUpperCase()}</div>`
+        : "";
+      return `
+        <div class="exercise-card" data-exercise="${ex.name.replace(/"/g, "&quot;")}" style="border-left-color: ${mg.color}; position: relative;">
+          ${badge}
+          ${muscleIcon(ex.muscleGroup, 28)}
+          <div class="exercise-card-name">${ex.name}</div>
+          <div class="exercise-card-plan">${ex.sets} × ${ex.repsPattern}</div>
+          <div class="exercise-card-status">${repsStr}</div>
+        </div>
+      `;
+    }).join("");
+    document.getElementById("hoy-exercises-grid").innerHTML = gridHTML;
+  } else {
+    document.getElementById("hoy-day-label").textContent = "Día libre";
+    document.getElementById("hoy-exercises-grid").innerHTML = `
+      <div class="empty-state" style="padding: 20px;">
+        <div class="empty-icon">🏊</div>
+        <div class="empty-title">Día libre</div>
+        <div class="empty-text">Hoy descansas. Si haces alguna actividad (nadar, correr, lo que sea), toca el + para registrarla.</div>
       </div>
     `;
-  }).join("");
-  document.getElementById("hoy-exercises-grid").innerHTML = gridHTML;
+  }
 
-  const otherExercises = todaySets.filter(s => !selectedDay.exercises.find(ex => ex.name === s.exerciseName));
+  const plannedNames = selectedDay ? selectedDay.exercises.map(ex => ex.name) : [];
+  const otherExercises = todaySets.filter(s => !plannedNames.includes(s.exerciseName));
   if (otherExercises.length > 0) {
     const othersHTML = `
       <div class="exercise-section-title">Otros ejercicios de hoy</div>
       ${otherExercises.map(s => {
         const mg = MUSCLE_GROUPS[s.muscleGroup] || MUSCLE_GROUPS.pecho;
         return `
-          <div class="exercise-card" data-exercise="${s.exerciseName}" style="border-left-color: ${mg.color}">
+          <div class="exercise-card" data-exercise="${s.exerciseName.replace(/"/g, "&quot;")}" style="border-left-color: ${mg.color}">
             ${muscleIcon(s.muscleGroup, 28)}
             <div class="exercise-card-name">${s.exerciseName}</div>
             <div class="exercise-card-plan">${s.reps} × ${s.weightDisplay} ${s.unit}</div>
@@ -1621,13 +1693,39 @@ async function renderHoy() {
   });
 
   document.querySelectorAll(".day-chip").forEach(chip => {
-    if (!chip.classList.contains("free-day")) {
-      chip.addEventListener("click", () => {
-        const dayNum = parseInt(chip.dataset.day);
-        localStorage.setItem("gymtracker.selectedDay", dayNum);
-        renderHoy();
-      });
-    }
+    chip.addEventListener("click", () => {
+      const day = chip.dataset.day;
+      localStorage.setItem("gymtracker.selectedDay", day);
+      renderHoy();
+    });
+  });
+}
+
+async function startEditSet(setId, exerciseName) {
+  const tx = db.transaction("sets", "readonly");
+  const store = tx.objectStore("sets");
+  const req = store.get(setId);
+  await new Promise(resolve => {
+    req.onsuccess = () => {
+      const set = req.result;
+      if (!set) { resolve(); return; }
+      editingSetId = setId;
+      document.getElementById("input-reps").value = set.reps;
+      document.getElementById("input-weight").value = set.weightDisplay;
+      document.getElementById("input-comment").value = set.notes || "";
+      lastUnitUsed[exerciseName] = set.unit;
+      document.getElementById("unit-kg").classList.toggle("active", set.unit === "kg");
+      document.getElementById("unit-lb").classList.toggle("active", set.unit === "lb");
+      const btn = document.getElementById("save-set-btn");
+      if (btn) {
+        btn.textContent = "Actualizar Serie";
+        btn.style.backgroundColor = "#FF9500";
+      }
+      // Scroll form into view
+      document.getElementById("input-reps").focus();
+      document.getElementById("input-reps").scrollIntoView({ behavior: "smooth", block: "center" });
+      resolve();
+    };
   });
 }
 
@@ -1655,7 +1753,26 @@ async function openExerciseSheet(exerciseName) {
   }
 
   document.getElementById("exercise-sheet-title").textContent = exerciseName;
-  document.getElementById("exercise-sheet-plan").textContent = exerciseData ? `Plan: ${exerciseData.sets} × ${exerciseData.repsPattern}` : "";
+  let planHTML = "";
+  if (exerciseData) {
+    const isCardio = exerciseData.muscleGroup === "cardio";
+    if (isCardio) {
+      const timingLabel = exerciseData.cardioTiming === "pre" ? "Cardio PRE" : exerciseData.cardioTiming === "post" ? "Cardio POST" : "Cardio";
+      planHTML = `<div style="font-weight:600;">${timingLabel} · ${exerciseData.repsPattern}</div>`;
+      if (exerciseData.cardioMethod) {
+        planHTML += `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Método: ${exerciseData.cardioMethod}</div>`;
+      }
+    } else {
+      planHTML = `<div style="font-weight:600;">Plan: ${exerciseData.sets} × ${exerciseData.repsPattern}</div>`;
+      if (exerciseData.rm) {
+        planHTML += `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">%RM: ${exerciseData.rm}</div>`;
+      }
+      if (exerciseData.tip) {
+        planHTML += `<div style="font-size:12px;color:var(--accent);margin-top:4px;font-style:italic;">💡 ${exerciseData.tip}</div>`;
+      }
+    }
+  }
+  document.getElementById("exercise-sheet-plan").innerHTML = planHTML;
 
   const history = await getExerciseHistory(exerciseName);
   const lastSession = history.find(s => s.date !== today);
@@ -1666,7 +1783,7 @@ async function openExerciseSheet(exerciseName) {
   document.getElementById("exercise-sheet-last-session").textContent = lastSessionText;
 
   const setsListHTML = todaysSets.map((s, idx) => `
-    <div class="set-row">
+    <div class="set-row" data-set-id="${s.id}" onclick="startEditSet(${s.id}, '${exerciseName.replace(/'/g, "\\'")}')">
       <div class="set-row-text">
         <div class="set-row-check">✓</div>
         <div class="set-row-content">
@@ -1674,7 +1791,7 @@ async function openExerciseSheet(exerciseName) {
           ${s.notes ? `<div class="set-row-comment">"${s.notes}"</div>` : ""}
         </div>
       </div>
-      <button class="set-row-delete" onclick="deleteSet(${s.id}); renderHoy(); openExerciseSheet('${exerciseName.replace(/'/g, "\\'")}');" title="Eliminar serie">✕</button>
+      <button class="set-row-delete" onclick="event.stopPropagation(); deleteSet(${s.id}).then(()=>{renderHoy();openExerciseSheet('${exerciseName.replace(/'/g, "\\'")}');});" title="Eliminar serie">✕</button>
     </div>
   `).join("");
   const sheetSetsEl = document.getElementById("exercise-sheet-sets");
@@ -1705,11 +1822,21 @@ async function openExerciseSheet(exerciseName) {
     const weight = parseFloat(document.getElementById("input-weight").value);
     const unit = lastUnitUsed[exerciseName];
     const comment = document.getElementById("input-comment").value;
-    if (!reps || !weight) {
-      alert("Ingresa repeticiones y peso");
+    if (isNaN(reps) || reps < 1 || isNaN(weight) || weight < 0) {
+      alert("Ingresa repeticiones (al menos 1). El peso puede ser 0 si el ejercicio no usa carga.");
       return;
     }
-    await saveSet(exerciseName, reps, weight, unit, comment);
+    if (editingSetId !== null) {
+      await updateSet(editingSetId, exerciseName, reps, weight, unit, comment);
+      editingSetId = null;
+      const btn = document.getElementById("save-set-btn");
+      if (btn) {
+        btn.textContent = "Guardar Serie";
+        btn.style.backgroundColor = "";
+      }
+    } else {
+      await saveSet(exerciseName, reps, weight, unit, comment);
+    }
     renderHoy();
     openExerciseSheet(exerciseName);
   };
@@ -1719,6 +1846,9 @@ async function openExerciseSheet(exerciseName) {
 }
 
 function closeExerciseSheet() {
+  editingSetId = null;
+  const btn = document.getElementById("save-set-btn");
+  if (btn) { btn.textContent = "Guardar Serie"; btn.style.backgroundColor = ""; }
   document.getElementById("sheet-overlay").classList.remove("active");
   document.getElementById("exercise-sheet").classList.remove("active");
 }
@@ -1947,8 +2077,13 @@ async function init() {
       const unit = confirm("¿Usar libras (Aceptar) o kg (Cancelar)?") ? "lb" : "kg";
       const reps = prompt("Repeticiones:");
       const weight = prompt("Peso:");
-      if (!reps || !weight) return;
-      await saveSet(name, parseInt(reps), parseFloat(weight), unit, "");
+      const repsN = parseInt(reps);
+      const weightN = parseFloat(weight);
+      if (isNaN(repsN) || repsN < 1 || isNaN(weightN) || weightN < 0) {
+        alert("Repeticiones debe ser ≥1 y peso ≥0");
+        return;
+      }
+      await saveSet(name, repsN, weightN, unit, "");
       renderHoy();
     });
 
@@ -2018,4 +2153,3 @@ if (document.readyState === "loading") {
   </script>
 </body>
 </html>
-      const action = prompt("Acción:\n\nEdit = Renombrar\nDuplicate = Duplicar\nDelete = Eliminar");
