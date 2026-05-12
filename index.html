@@ -932,6 +932,7 @@
       <div style="font-size:48px;margin-bottom:8px;text-align:center;">💪</div>
       <div style="font-size:26px;font-weight:700;text-align:center;margin-bottom:6px;">Gym Tracker</div>
       <div style="font-size:14px;color:var(--text-secondary);text-align:center;margin-bottom:28px;">Inicia sesión para sincronizar tu data entre dispositivos y no perderla.</div>
+      <div id="login-error" style="display:none;background:#FF3B30;color:white;padding:10px 12px;border-radius:8px;font-size:12px;margin-bottom:12px;word-break:break-word;"></div>
       <div id="login-email-step">
         <input type="email" id="login-email" placeholder="tu@correo.com" autocomplete="email" inputmode="email" style="width:100%;padding:14px;font-size:16px;border-radius:10px;border:1px solid var(--divider);background:var(--bg-secondary);color:var(--text-primary);margin-bottom:12px;box-sizing:border-box;">
         <button id="login-send-btn" style="width:100%;padding:14px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;">Enviar código</button>
@@ -1215,7 +1216,7 @@ function getTodayISO() {
   return today.toISOString().split("T")[0];
 }
 
-const APP_VERSION = "2026-05-11-002";
+const APP_VERSION = "2026-05-11-003";
 
 
 const SUPABASE_URL = "https://lxtemcckticbckvxhzmu.supabase.co";
@@ -1237,11 +1238,18 @@ function saveSession(s) {
 function getUserId() { return authSession && authSession.user ? authSession.user.id : null; }
 
 async function supabaseFetch(path, options = {}) {
-  const headers = { "apikey": SUPABASE_KEY, "Content-Type": "application/json", ...(options.headers || {}) };
-  if (authSession && authSession.access_token) headers["Authorization"] = "Bearer " + authSession.access_token;
+  const token = (authSession && authSession.access_token) ? authSession.access_token : SUPABASE_KEY;
+  const headers = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": "Bearer " + token,
+    "Content-Type": "application/json",
+    ...(options.headers || {})
+  };
+  console.log("[supabase] " + (options.method || "GET") + " " + path);
   const resp = await fetch(SUPABASE_URL + path, { ...options, headers });
   if (!resp.ok) {
     const text = await resp.text();
+    console.error("[supabase] " + resp.status + ":", text);
     throw new Error("Supabase " + resp.status + ": " + text);
   }
   if (resp.status === 204) return null;
@@ -1479,9 +1487,17 @@ function hideLoginScreen() {
   if (app) app.style.display = "";
 }
 
+function showLoginError(msg) {
+  const el = document.getElementById("login-error");
+  if (!el) return;
+  if (msg) { el.textContent = msg; el.style.display = "block"; }
+  else { el.style.display = "none"; el.textContent = ""; }
+}
+
 async function handleLoginSend() {
+  showLoginError(null);
   const email = document.getElementById("login-email").value.trim();
-  if (!email || !email.includes("@")) { alert("Ingresa un correo válido"); return; }
+  if (!email || !email.includes("@")) { showLoginError("Ingresa un correo válido"); return; }
   const btn = document.getElementById("login-send-btn");
   btn.disabled = true;
   btn.textContent = "Enviando...";
@@ -1492,16 +1508,17 @@ async function handleLoginSend() {
     document.getElementById("login-email-display").textContent = email;
     document.getElementById("login-code").focus();
   } catch (e) {
-    alert("Error: " + e.message);
+    showLoginError("Error: " + e.message);
   } finally {
     btn.disabled = false;
     btn.textContent = "Enviar código";
   }
 }
 async function handleLoginVerify() {
+  showLoginError(null);
   const email = document.getElementById("login-email").value.trim();
   const code = document.getElementById("login-code").value.trim();
-  if (!code) { alert("Ingresa el código"); return; }
+  if (!code) { showLoginError("Ingresa el código"); return; }
   const btn = document.getElementById("login-verify-btn");
   btn.disabled = true;
   btn.textContent = "Verificando...";
@@ -1512,7 +1529,7 @@ async function handleLoginVerify() {
     hideLoginScreen();
     await renderHoy();
   } catch (e) {
-    alert("Código inválido o expirado: " + e.message);
+    showLoginError("Código inválido o expirado: " + e.message);
   } finally {
     btn.disabled = false;
     btn.textContent = "Verificar";
@@ -2558,20 +2575,3 @@ if (document.readyState === "loading") {
   </script>
 </body>
 </html>
-alert("Repeticiones debe ser ≥1 y peso ≥0");
-        return;
-      }
-      await saveSet(name, repsN, weightN, unit, "");
-      renderHoy();
-    });
-
-    const settingsHandler = () => {
-      const action = prompt("Acción:\n\n1 = Cerrar sesión\n2 = Exportar JSON local\n3 = Borrar todo\n\nEscribe 1, 2 o 3:");
-      if (action === "1") {
-        handleLogout();
-      } else if (action === "2") {
-        exportData().then(d => {
-          const json = JSON.stringify(d, null, 2);
-          const blob = new Blob([json], { type: "application/json" });
-          const url = URL.createObjectURL(blob);
-    
