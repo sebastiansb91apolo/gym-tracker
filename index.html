@@ -936,11 +936,11 @@
       <div id="login-email-step">
         <input type="email" id="login-email" placeholder="tu@correo.com" autocomplete="email" inputmode="email" style="width:100%;padding:14px;font-size:16px;border-radius:10px;border:1px solid var(--divider);background:var(--bg-secondary);color:var(--text-primary);margin-bottom:12px;box-sizing:border-box;">
         <button id="login-send-btn" style="width:100%;padding:14px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;">Enviar código</button>
-        <div style="font-size:11px;color:var(--text-secondary);margin-top:12px;text-align:center;line-height:1.4;">Te enviaremos un código de 6 dígitos a tu correo. Sin contraseñas.</div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:12px;text-align:center;line-height:1.4;">Te enviaremos un código a tu correo. Sin contraseñas.</div>
       </div>
       <div id="login-code-step" style="display:none;">
         <div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;text-align:center;">Te enviamos un código a<br><span id="login-email-display" style="color:var(--text-primary);font-weight:600;"></span></div>
-        <input type="text" id="login-code" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" maxlength="6" style="width:100%;padding:14px;font-size:22px;border-radius:10px;border:1px solid var(--divider);background:var(--bg-secondary);color:var(--text-primary);margin-bottom:12px;text-align:center;letter-spacing:8px;box-sizing:border-box;">
+        <input type="text" id="login-code" placeholder="Pega el código" inputmode="numeric" autocomplete="one-time-code" maxlength="10" style="width:100%;padding:14px;font-size:20px;border-radius:10px;border:1px solid var(--divider);background:var(--bg-secondary);color:var(--text-primary);margin-bottom:12px;text-align:center;letter-spacing:4px;box-sizing:border-box;">
         <button id="login-verify-btn" style="width:100%;padding:14px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:8px;">Verificar</button>
         <button id="login-back-btn" style="width:100%;padding:10px;background:none;color:var(--text-secondary);border:none;font-size:13px;cursor:pointer;">← Cambiar correo</button>
       </div>
@@ -1216,7 +1216,7 @@ function getTodayISO() {
   return today.toISOString().split("T")[0];
 }
 
-const APP_VERSION = "2026-05-11-004";
+const APP_VERSION = "2026-05-11-005";
 
 
 const SUPABASE_URL = "https://lxtemcckticbckvxhzmu.supabase.co";
@@ -2593,3 +2593,4 @@ if (document.readyState === "loading") {
   </script>
 </body>
 </html>
+aler
