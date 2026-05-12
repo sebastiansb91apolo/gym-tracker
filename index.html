@@ -1216,7 +1216,7 @@ function getTodayISO() {
   return today.toISOString().split("T")[0];
 }
 
-const APP_VERSION = "2026-05-11-003";
+const APP_VERSION = "2026-05-11-004";
 
 
 const SUPABASE_URL = "https://lxtemcckticbckvxhzmu.supabase.co";
@@ -2554,6 +2554,24 @@ async function init() {
         }
       }
     });
+
+    // Login screen handlers
+    console.log("[init] Wiring login handlers, button exists:", !!document.getElementById("login-send-btn"));
+    safeOn("login-send-btn", "click", handleLoginSend);
+    safeOn("login-verify-btn", "click", handleLoginVerify);
+    safeOn("login-back-btn", "click", handleLoginBack);
+    const loginCodeInput = document.getElementById("login-code");
+    if (loginCodeInput) {
+      loginCodeInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") handleLoginVerify();
+      });
+    }
+    const loginEmailInput = document.getElementById("login-email");
+    if (loginEmailInput) {
+      loginEmailInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") handleLoginSend();
+      });
+    }
   } catch (e) {
     console.error("init listeners error:", e);
     showFatalError(e);
