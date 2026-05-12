@@ -927,12 +927,33 @@
 </head>
 <body>
   <div id="update-banner" style="display:none;position:fixed;top:0;left:0;right:0;background:#FF9500;color:white;padding:12px 16px;text-align:center;font-weight:600;font-size:14px;z-index:10000;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3);">🔄 Nueva versión disponible. Toca aquí para actualizar.</div>
+  <div id="login-overlay" style="display:none;position:fixed;inset:0;background:var(--bg-primary);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
+    <div style="max-width:340px;width:100%;">
+      <div style="font-size:48px;margin-bottom:8px;text-align:center;">💪</div>
+      <div style="font-size:26px;font-weight:700;text-align:center;margin-bottom:6px;">Gym Tracker</div>
+      <div style="font-size:14px;color:var(--text-secondary);text-align:center;margin-bottom:28px;">Inicia sesión para sincronizar tu data entre dispositivos y no perderla.</div>
+      <div id="login-email-step">
+        <input type="email" id="login-email" placeholder="tu@correo.com" autocomplete="email" inputmode="email" style="width:100%;padding:14px;font-size:16px;border-radius:10px;border:1px solid var(--divider);background:var(--bg-secondary);color:var(--text-primary);margin-bottom:12px;box-sizing:border-box;">
+        <button id="login-send-btn" style="width:100%;padding:14px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;">Enviar código</button>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:12px;text-align:center;line-height:1.4;">Te enviaremos un código de 6 dígitos a tu correo. Sin contraseñas.</div>
+      </div>
+      <div id="login-code-step" style="display:none;">
+        <div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;text-align:center;">Te enviamos un código a<br><span id="login-email-display" style="color:var(--text-primary);font-weight:600;"></span></div>
+        <input type="text" id="login-code" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" maxlength="6" style="width:100%;padding:14px;font-size:22px;border-radius:10px;border:1px solid var(--divider);background:var(--bg-secondary);color:var(--text-primary);margin-bottom:12px;text-align:center;letter-spacing:8px;box-sizing:border-box;">
+        <button id="login-verify-btn" style="width:100%;padding:14px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:8px;">Verificar</button>
+        <button id="login-back-btn" style="width:100%;padding:10px;background:none;color:var(--text-secondary);border:none;font-size:13px;cursor:pointer;">← Cambiar correo</button>
+      </div>
+    </div>
+  </div>
   <div id="app">
     <div id="hoy-view" class="view active">
       <div class="header">
         <div class="header-top">
           <div class="header-title">Hoy</div>
-          <button class="header-action" id="hoy-settings-btn">⚙️</button>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <span id="sync-indicator" style="font-size:14px;font-weight:700;" title=""></span>
+            <button class="header-action" id="hoy-settings-btn">⚙️</button>
+          </div>
         </div>
         <div class="header-subtitle" id="hoy-date"></div>
       </div>
@@ -1194,7 +1215,319 @@ function getTodayISO() {
   return today.toISOString().split("T")[0];
 }
 
-const APP_VERSION = "2026-05-11-001";
+const APP_VERSION = "2026-05-11-002";
+
+
+const SUPABASE_URL = "https://lxtemcckticbckvxhzmu.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx4dGVtY2NrdGljYmNrdnhoem11Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0NTU0OTcsImV4cCI6MjA5NDAzMTQ5N30.f_H17cvpglQqlTijCa28MIZXygQ_PoDWGITNkNWl3Gg";
+
+let authSession = null;
+let syncStatus = "idle";
+
+function loadSession() {
+  const s = localStorage.getItem("gymtracker.session");
+  if (!s) return null;
+  try { return JSON.parse(s); } catch { return null; }
+}
+function saveSession(s) {
+  if (s) localStorage.setItem("gymtracker.session", JSON.stringify(s));
+  else localStorage.removeItem("gymtracker.session");
+  authSession = s;
+}
+function getUserId() { return authSession && authSession.user ? authSession.user.id : null; }
+
+async function supabaseFetch(path, options = {}) {
+  const headers = { "apikey": SUPABASE_KEY, "Content-Type": "application/json", ...(options.headers || {}) };
+  if (authSession && authSession.access_token) headers["Authorization"] = "Bearer " + authSession.access_token;
+  const resp = await fetch(SUPABASE_URL + path, { ...options, headers });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error("Supabase " + resp.status + ": " + text);
+  }
+  if (resp.status === 204) return null;
+  const ct = resp.headers.get("content-type") || "";
+  return ct.includes("application/json") ? resp.json() : null;
+}
+
+async function requestOTP(email) {
+  return supabaseFetch("/auth/v1/otp", {
+    method: "POST",
+    body: JSON.stringify({ email, create_user: true })
+  });
+}
+async function verifyOTP(email, token) {
+  const data = await supabaseFetch("/auth/v1/verify", {
+    method: "POST",
+    body: JSON.stringify({ email, token, type: "email" })
+  });
+  saveSession(data);
+  return data;
+}
+async function refreshSession() {
+  if (!authSession || !authSession.refresh_token) return false;
+  try {
+    const data = await supabaseFetch("/auth/v1/token?grant_type=refresh_token", {
+      method: "POST",
+      body: JSON.stringify({ refresh_token: authSession.refresh_token })
+    });
+    saveSession(data);
+    return true;
+  } catch (e) { return false; }
+}
+async function signOut() {
+  if (authSession) {
+    try { await supabaseFetch("/auth/v1/logout", { method: "POST" }); } catch (e) {}
+  }
+  saveSession(null);
+}
+
+function updateSyncIndicator() {
+  const el = document.getElementById("sync-indicator");
+  if (!el) return;
+  const map = {
+    idle: { text: "✓", color: "#4ED865", title: "Sincronizado" },
+    syncing: { text: "⟳", color: "#FF9500", title: "Sincronizando..." },
+    error: { text: "⚠", color: "#FF3B30", title: "Error de sync" },
+    offline: { text: "○", color: "#888", title: "Sin conexión" }
+  };
+  const cfg = map[syncStatus] || map.idle;
+  el.textContent = cfg.text;
+  el.style.color = cfg.color;
+  el.title = cfg.title;
+}
+function setSync(s) { syncStatus = s; updateSyncIndicator(); }
+
+function setToCloud(s) {
+  return {
+    id: s.cloudId,
+    user_id: getUserId(),
+    exercise_name: s.exerciseName,
+    weight_kg: s.weightKg || 0,
+    weight_display: s.weightDisplay || 0,
+    unit: s.unit || "kg",
+    reps: s.reps,
+    date: s.date,
+    notes: s.notes || "",
+    muscle_group: s.muscleGroup || null
+  };
+}
+function setFromCloud(c) {
+  return {
+    cloudId: c.id,
+    exerciseName: c.exercise_name,
+    weightKg: Number(c.weight_kg),
+    weightDisplay: Number(c.weight_display),
+    unit: c.unit,
+    reps: c.reps,
+    date: c.date,
+    notes: c.notes || "",
+    muscleGroup: c.muscle_group
+  };
+}
+function routineToCloud(r) {
+  return {
+    id: r.id,
+    user_id: getUserId(),
+    name: r.name,
+    is_active: !!r.isActive,
+    days: r.days
+  };
+}
+function routineFromCloud(c) {
+  return {
+    id: c.id,
+    name: c.name,
+    createdAt: c.created_at,
+    isActive: !!c.is_active,
+    days: c.days
+  };
+}
+
+async function pushSetToCloud(localSet) {
+  if (!authSession) return;
+  if (!localSet.cloudId) {
+    localSet.cloudId = crypto.randomUUID();
+    try {
+      const tx = db.transaction("sets", "readwrite");
+      tx.objectStore("sets").put(localSet);
+    } catch (e) {}
+  }
+  try {
+    setSync("syncing");
+    await supabaseFetch("/rest/v1/sets", {
+      method: "POST",
+      headers: { "Prefer": "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify(setToCloud(localSet))
+    });
+    setSync("idle");
+  } catch (e) { console.error("Push set failed:", e); setSync("error"); }
+}
+async function updateSetInCloud(localSet) {
+  if (!authSession || !localSet.cloudId) return;
+  try {
+    setSync("syncing");
+    await supabaseFetch("/rest/v1/sets?id=eq." + localSet.cloudId, {
+      method: "PATCH",
+      headers: { "Prefer": "return=minimal" },
+      body: JSON.stringify(setToCloud(localSet))
+    });
+    setSync("idle");
+  } catch (e) { console.error("Update set failed:", e); setSync("error"); }
+}
+async function deleteSetInCloud(cloudId) {
+  if (!authSession || !cloudId) return;
+  try {
+    setSync("syncing");
+    await supabaseFetch("/rest/v1/sets?id=eq." + cloudId, {
+      method: "DELETE",
+      headers: { "Prefer": "return=minimal" }
+    });
+    setSync("idle");
+  } catch (e) { console.error("Delete set failed:", e); setSync("error"); }
+}
+async function pushRoutineToCloud(r) {
+  if (!authSession) return;
+  try {
+    setSync("syncing");
+    await supabaseFetch("/rest/v1/routines", {
+      method: "POST",
+      headers: { "Prefer": "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify(routineToCloud(r))
+    });
+    setSync("idle");
+  } catch (e) { console.error("Push routine failed:", e); setSync("error"); }
+}
+async function deleteRoutineInCloud(id) {
+  if (!authSession || !id) return;
+  try {
+    setSync("syncing");
+    await supabaseFetch("/rest/v1/routines?id=eq." + id, {
+      method: "DELETE",
+      headers: { "Prefer": "return=minimal" }
+    });
+    setSync("idle");
+  } catch (e) { console.error("Delete routine failed:", e); setSync("error"); }
+}
+
+async function pullFromCloud() {
+  if (!authSession) return;
+  try {
+    setSync("syncing");
+    const [cloudSets, cloudRoutines] = await Promise.all([
+      supabaseFetch("/rest/v1/sets?select=*&order=date.desc"),
+      supabaseFetch("/rest/v1/routines?select=*")
+    ]);
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(["sets", "routines"], "readwrite");
+      const setsStore = tx.objectStore("sets");
+      const routinesStore = tx.objectStore("routines");
+      setsStore.clear().onsuccess = () => {
+        for (const s of cloudSets) setsStore.add(setFromCloud(s));
+      };
+      routinesStore.clear().onsuccess = () => {
+        for (const r of cloudRoutines) routinesStore.add(routineFromCloud(r));
+      };
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    setSync("idle");
+  } catch (e) { console.error("Pull failed:", e); setSync("offline"); }
+}
+
+async function initialUpload() {
+  if (!authSession) return;
+  try {
+    setSync("syncing");
+    const allSets = await getAllSets();
+    const allRoutines = await getAllRoutines();
+    if (allSets.length > 0) {
+      const tx = db.transaction("sets", "readwrite");
+      const store = tx.objectStore("sets");
+      for (const s of allSets) {
+        if (!s.cloudId) { s.cloudId = crypto.randomUUID(); store.put(s); }
+      }
+      await new Promise(r => tx.oncomplete = r);
+      const payload = allSets.map(setToCloud);
+      await supabaseFetch("/rest/v1/sets", {
+        method: "POST",
+        headers: { "Prefer": "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify(payload)
+      });
+    }
+    if (allRoutines.length > 0) {
+      const payload = allRoutines.map(routineToCloud);
+      await supabaseFetch("/rest/v1/routines", {
+        method: "POST",
+        headers: { "Prefer": "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify(payload)
+      });
+    }
+    setSync("idle");
+  } catch (e) { console.error("Initial upload failed:", e); setSync("error"); }
+}
+
+function showLoginScreen() {
+  const overlay = document.getElementById("login-overlay");
+  const app = document.getElementById("app");
+  if (overlay) overlay.style.display = "flex";
+  if (app) app.style.display = "none";
+}
+function hideLoginScreen() {
+  const overlay = document.getElementById("login-overlay");
+  const app = document.getElementById("app");
+  if (overlay) overlay.style.display = "none";
+  if (app) app.style.display = "";
+}
+
+async function handleLoginSend() {
+  const email = document.getElementById("login-email").value.trim();
+  if (!email || !email.includes("@")) { alert("Ingresa un correo válido"); return; }
+  const btn = document.getElementById("login-send-btn");
+  btn.disabled = true;
+  btn.textContent = "Enviando...";
+  try {
+    await requestOTP(email);
+    document.getElementById("login-email-step").style.display = "none";
+    document.getElementById("login-code-step").style.display = "block";
+    document.getElementById("login-email-display").textContent = email;
+    document.getElementById("login-code").focus();
+  } catch (e) {
+    alert("Error: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Enviar código";
+  }
+}
+async function handleLoginVerify() {
+  const email = document.getElementById("login-email").value.trim();
+  const code = document.getElementById("login-code").value.trim();
+  if (!code) { alert("Ingresa el código"); return; }
+  const btn = document.getElementById("login-verify-btn");
+  btn.disabled = true;
+  btn.textContent = "Verificando...";
+  try {
+    await verifyOTP(email, code);
+    await initialUpload();
+    await pullFromCloud();
+    hideLoginScreen();
+    await renderHoy();
+  } catch (e) {
+    alert("Código inválido o expirado: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Verificar";
+  }
+}
+function handleLoginBack() {
+  document.getElementById("login-code-step").style.display = "none";
+  document.getElementById("login-email-step").style.display = "block";
+  document.getElementById("login-code").value = "";
+}
+async function handleLogout() {
+  if (!confirm("¿Cerrar sesión? Tu data se conserva en la nube, solo tendrás que volver a entrar para verla.")) return;
+  await signOut();
+  location.reload();
+}
 
 let db = null;
 let lastUnitUsed = {};
@@ -1440,6 +1773,7 @@ async function saveSet(exerciseName, reps, weightDisplay, unit, notes = "") {
   }
 
   const set = {
+    cloudId: crypto.randomUUID(),
     exerciseName,
     weightKg,
     weightDisplay,
@@ -1454,8 +1788,10 @@ async function saveSet(exerciseName, reps, weightDisplay, unit, notes = "") {
   const store = tx.objectStore("sets");
   await new Promise(resolve => {
     const req = store.add(set);
-    req.onsuccess = () => resolve();
+    req.onsuccess = (ev) => { set.id = ev.target.result; resolve(); };
   });
+
+  pushSetToCloud(set).catch(() => {});
 }
 
 async function updateSet(id, exerciseName, reps, weightDisplay, unit, notes) {
@@ -1473,7 +1809,10 @@ async function updateSet(id, exerciseName, reps, weightDisplay, unit, notes) {
       set.unit = unit;
       set.notes = notes;
       const putReq = store.put(set);
-      putReq.onsuccess = () => resolve();
+      putReq.onsuccess = () => {
+        updateSetInCloud(set).catch(() => {});
+        resolve();
+      };
       putReq.onerror = () => reject(putReq.error);
     };
     getReq.onerror = () => reject(getReq.error);
@@ -1504,12 +1843,20 @@ async function getExerciseHistory(exerciseName) {
 }
 
 async function deleteSet(id) {
+  let cloudId = null;
+  await new Promise(resolve => {
+    const tx = db.transaction("sets", "readonly");
+    const req = tx.objectStore("sets").get(id);
+    req.onsuccess = () => { if (req.result) cloudId = req.result.cloudId; resolve(); };
+    req.onerror = () => resolve();
+  });
   const tx = db.transaction("sets", "readwrite");
   const store = tx.objectStore("sets");
   await new Promise(resolve => {
     const req = store.delete(id);
     req.onsuccess = () => resolve();
   });
+  if (cloudId) deleteSetInCloud(cloudId).catch(() => {});
 }
 
 async function getAllSets() {
@@ -1537,6 +1884,7 @@ async function saveRoutine(routine) {
     const req = store.put(routine);
     req.onsuccess = () => resolve();
   });
+  pushRoutineToCloud(routine).catch(() => {});
 }
 
 async function deleteRoutine(id) {
@@ -1546,6 +1894,7 @@ async function deleteRoutine(id) {
     const req = store.delete(id);
     req.onsuccess = () => resolve();
   });
+  deleteRoutineInCloud(id).catch(() => {});
 }
 
 async function exportData() {
@@ -2086,13 +2435,30 @@ function safeOn(id, event, handler) {
 }
 
 async function init() {
-  // Revisar si hay nueva versión (no bloquea la carga)
   setTimeout(checkForUpdates, 1500);
+  authSession = loadSession();
 
   try {
     await initDB();
     await seedRoutines();
-    await renderHoy();
+
+    if (!authSession) {
+      showLoginScreen();
+    } else {
+      const expSec = authSession.expires_at;
+      if (expSec && Date.now() / 1000 > expSec) {
+        const ok = await refreshSession();
+        if (!ok) {
+          saveSession(null);
+          showLoginScreen();
+        }
+      }
+      if (authSession) {
+        try { await pullFromCloud(); } catch (e) { console.error("Pull at init failed:", e); }
+        await renderHoy();
+        updateSyncIndicator();
+      }
+    }
   } catch (e) {
     console.error("init error:", e);
     showFatalError(e);
@@ -2192,3 +2558,20 @@ if (document.readyState === "loading") {
   </script>
 </body>
 </html>
+alert("Repeticiones debe ser ≥1 y peso ≥0");
+        return;
+      }
+      await saveSet(name, repsN, weightN, unit, "");
+      renderHoy();
+    });
+
+    const settingsHandler = () => {
+      const action = prompt("Acción:\n\n1 = Cerrar sesión\n2 = Exportar JSON local\n3 = Borrar todo\n\nEscribe 1, 2 o 3:");
+      if (action === "1") {
+        handleLogout();
+      } else if (action === "2") {
+        exportData().then(d => {
+          const json = JSON.stringify(d, null, 2);
+          const blob = new Blob([json], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+    
